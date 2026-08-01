@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: #faf9f5;
+  color: #1c1d1a;
+}
+
+.tile-canvas {
+  background: repeating-conic-gradient(#eceae2 0% 25%, #ffffff 0% 50%) 50% / 12px 12px;
+}
