@@ -249,7 +249,12 @@ export default function GridCutter() {
       form.append('hLines',   JSON.stringify(hLines));
       form.append('isCustom', isCustom ? 'true' : 'false');
       const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
-      const res = await fetch(`${apiBase}/stickers/generate-pack`, { method: 'POST', body: form });
+     const token = typeof window !== 'undefined' ? localStorage.getItem('sticker_token') : null;
+const res = await fetch(`${apiBase}/stickers/generate-pack`, {
+  method: 'POST',
+  body: form,
+  headers: token ? { Authorization: `Bearer ${token}` } : {},
+});
       if (!res.ok) { const t = await res.text(); throw new Error(t || `後端錯誤 (${res.status})`); }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
