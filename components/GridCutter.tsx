@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getToken, isLoggedIn } from '@/lib/auth';
 
 const STAGE = 320;
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -15,6 +16,16 @@ const COUNT_GRID: Record<number, [number, number]> = {
 
 type DragTarget = { type: 'v' | 'h'; index: number } | null;
 
+interface Preset {
+  id: string;
+  name: string;
+  rows: number;
+  cols: number;
+  isCustom: boolean;
+  vLines: number[];
+  hLines: number[];
+}
+
 function evenSplit(n: number): number[] {
   const lines: number[] = [];
   for (let i = 1; i < n; i++) lines.push(i / n);
@@ -24,10 +35,14 @@ function evenSplit(n: number): number[] {
 interface ImageRect { x: number; y: number; w: number; h: number; }
 
 export default function GridCutter() {
-  const [count, setCount]           = useState<number>(40);
-  const [isCustom, setIsCustom]     = useState(false);
-  const [customRows, setCustomRows] = useState(6);
-  const [customCols, setCustomCols] = useState(6);
+  const [count, setCount]                     = useState<number>(40);
+  const [isCustom, setIsCustom]               = useState(false);
+  const [customRows, setCustomRows]           = useState(6);
+  const [customCols, setCustomCols]           = useState(6);
+  const [presetName, setPresetName]           = useState('');
+  const [showPresetInput, setShowPresetInput] = useState(false);
+  const [presets, setPresets]                 = useState<Preset[]>([]);
+  const [showPresets, setShowPresets]         = useState(false);
 
   const rows = isCustom ? customRows : COUNT_GRID[count][0];
   const cols = isCustom ? customCols : COUNT_GRID[count][1];
@@ -237,6 +252,84 @@ export default function GridCutter() {
 
   const onPointerUp = () => { dragRef.current = null; };
 
+  const handleSavePreset = () => {
+    if (!isLoggedIn()) {
+      setStatusMessage('請先登錄才能儲存設定');
+      setStatus('error');
+      return;
+    }
+    setShowPresetInput(true);
+  };
+
+  const confirmSavePreset = async () => {
+    if (!presetName.trim()) return;
+    setShowPresetInput(false);
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+      const res = await fetch(`${apiBase}/presets`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${getToken()}`,
+        },
+        body: JSON.stringify({ name: presetName, rows, cols, isCustom, vLines, hLines }),
+      });
+      if (!res.ok) throw new Error('儲存失敗');
+      setStatus('done');
+      setStatusMessage(`設定「${presetName}」已儲存。`);
+      setPresetName('');
+    } catch {
+      setStatus('error');
+      setStatusMessage('儲存設定失敗。');
+    }
+  };
+
+  const loadPresets = async () => {
+    if (!isLoggedIn()) return;
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+      const res = await fetch(`${apiBase}/presets`, {
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      const data = await res.json();
+      setPresets(Array.isArray(data) ? data : []);
+      setShowPresets(true);
+    } catch {
+      setStatusMessage('載入設定失敗。');
+      setStatus('error');
+    }
+  };
+
+  const applyPreset = (preset: Preset) => {
+    if (preset.isCustom) {
+      setIsCustom(true);
+      setCustomRows(preset.rows);
+      setCustomCols(preset.cols);
+    } else {
+      setIsCustom(false);
+      setCount(preset.rows * preset.cols);
+    }
+    setVLines(preset.vLines);
+    setHLines(preset.hLines);
+    setShowPresets(false);
+    setStatusMessage(`已套用設定「${preset.name}」。`);
+    setStatus('done');
+  };
+
+  const deletePreset = async (id: string) => {
+    try {
+      const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+      await fetch(`${apiBase}/presets/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${getToken()}` },
+      });
+      setPresets((prev) => prev.filter((p) => p.id !== id));
+    } catch {
+      setStatusMessage('刪除失敗。');
+      setStatus('error');
+    }
+  };
+
   const handleExport = async () => {
     if (!fileRef.current) { setStatus('error'); setStatusMessage('請先上傳一張圖片。'); return; }
     setStatus('working'); setStatusMessage('正在產生 ZIP...');
@@ -249,12 +342,12 @@ export default function GridCutter() {
       form.append('hLines',   JSON.stringify(hLines));
       form.append('isCustom', isCustom ? 'true' : 'false');
       const apiBase = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
-     const token = typeof window !== 'undefined' ? localStorage.getItem('sticker_token') : null;
-const res = await fetch(`${apiBase}/stickers/generate-pack`, {
-  method: 'POST',
-  body: form,
-  headers: token ? { Authorization: `Bearer ${token}` } : {},
-});
+      const token = typeof window !== 'undefined' ? localStorage.getItem('sticker_token') : null;
+      const res = await fetch(`${apiBase}/stickers/generate-pack`, {
+        method: 'POST',
+        body: form,
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
       if (!res.ok) { const t = await res.text(); throw new Error(t || `後端錯誤 (${res.status})`); }
       const blob = await res.blob();
       const url  = URL.createObjectURL(blob);
@@ -355,6 +448,61 @@ const res = await fetch(`${apiBase}/stickers/generate-pack`, {
           className="w-full rounded-lg bg-line06 px-4 py-2.5 text-sm font-medium text-white transition-opacity disabled:opacity-60">
           {status === 'working' ? '產生中...' : '匯出 ZIP'}
         </button>
+
+        <div className="mt-2 flex gap-2">
+          <button onClick={handleSavePreset}
+            className="flex-1 rounded-lg border border-ink/20 px-4 py-2.5 text-sm font-medium text-ink/70 hover:border-ink/40">
+            儲存設定
+          </button>
+          <button onClick={loadPresets}
+            className="flex-1 rounded-lg border border-ink/20 px-4 py-2.5 text-sm font-medium text-ink/70 hover:border-ink/40">
+            載入設定
+          </button>
+        </div>
+
+        {showPresetInput && (
+          <div className="mt-2 flex gap-2">
+            <input
+              type="text"
+              value={presetName}
+              onChange={(e) => setPresetName(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && confirmSavePreset()}
+              placeholder="輸入設定名稱"
+              className="flex-1 rounded-lg border border-ink/20 px-3 py-2 text-sm outline-none focus:border-accent"
+              autoFocus
+            />
+            <button onClick={confirmSavePreset}
+              className="rounded-lg bg-accent px-3 py-2 text-sm font-medium text-white">
+              確認
+            </button>
+            <button onClick={() => setShowPresetInput(false)}
+              className="rounded-lg border border-ink/20 px-3 py-2 text-sm text-ink/60">
+              取消
+            </button>
+          </div>
+        )}
+
+        {showPresets && (
+          <div className="mt-2 rounded-xl border border-ink/10 bg-white py-1 shadow-sm">
+            {presets.length === 0 ? (
+              <p className="px-4 py-3 text-center text-xs text-ink/45">還沒有儲存過任何設定</p>
+            ) : (
+              presets.map((p) => (
+                <div key={p.id} className="flex items-center hover:bg-ink/5">
+                  <button onClick={() => applyPreset(p)}
+                    className="flex-1 px-4 py-2.5 text-left text-sm">
+                    <span className="font-medium">{p.name}</span>
+                    <span className="ml-2 text-xs text-ink/45">{p.rows}×{p.cols} ({p.rows * p.cols}張)</span>
+                  </button>
+                  <button onClick={() => deletePreset(p.id)}
+                    className="px-3 py-2.5 text-xs text-red-400 hover:text-red-600">
+                    刪除
+                  </button>
+                </div>
+              ))
+            )}
+          </div>
+        )}
 
         {statusMessage && (
           <p className={`mt-3 text-sm ${status === 'error' ? 'text-red-600' : 'text-ink/65'}`}>
