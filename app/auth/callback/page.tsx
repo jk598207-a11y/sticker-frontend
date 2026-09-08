@@ -1,10 +1,18 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { saveAuth } from '@/lib/auth';
 
 export default function CallbackPage() {
+  return (
+    <Suspense fallback={<main className="flex min-h-screen items-center justify-center bg-paper"><p className="text-sm text-ink/55">登錄中，請稍候...</p></main>}>
+      <CallbackContent />
+    </Suspense>
+  );
+}
+
+function CallbackContent() {
   const router       = useRouter();
   const searchParams = useSearchParams();
 

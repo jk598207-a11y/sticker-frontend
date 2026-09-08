@@ -80,7 +80,9 @@ export default function OrdersPage() {
               className="rounded-xl border border-ink/10 px-5 py-4">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-ink/40">
-                  {new Date(order.createdAt).toLocaleString('zh-TW')}
+                  {new Intl.DateTimeFormat(undefined, {
+                     dateStyle: 'medium', 
+                     timeStyle: 'short' }).format(new Date(order.createdAt))}
                 </p>
                 <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${STATUS_COLOR[order.status] ?? 'bg-gray-100 text-gray-600'}`}>
                   {STATUS_LABEL[order.status] ?? order.status}
