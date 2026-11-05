@@ -61,7 +61,12 @@ export function useGridLines() {
     });
     return dragRef.current.type === 'v' ? 'col-resize' : 'row-resize';
   };
-  const applyPreset = (preset: Preset) => {
+  const applyPreset = (
+  preset: Pick<
+    Preset,
+    'rows' | 'cols' | 'isCustom' | 'vLines' | 'hLines'
+  >,
+) => {
     setIsCustom(preset.isCustom);
     if (preset.isCustom) { setCustomRows(preset.rows); setCustomCols(preset.cols); }
     else if (COUNT_GRID[preset.rows * preset.cols]) setCount(preset.rows * preset.cols);

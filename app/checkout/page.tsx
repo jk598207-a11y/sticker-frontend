@@ -2,7 +2,7 @@
 
 import { PayPalButtons, PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect} from 'react';
 import { getToken, isLoggedIn } from '@/lib/auth';
 
 export default function CheckoutPage() {
@@ -18,13 +18,21 @@ function CheckoutContent() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get('orderId');
   const [message, setMessage] = useState('');
-  const apiBase =
-    process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
-  const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID;
+  const apiBase =process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:4000';
+  const paypalClientId = process.env.NEXT_PUBLIC_PAYPAL_CLIENT_ID
+  const [authChecked, setAuthChecked] = useState(false);
 
-  if (!isLoggedIn()) {
-    router.replace('/auth/login');
-    return null;
+useEffect(() => {
+    if (!isLoggedIn()) {
+      router.replace('/auth/login');
+      return;
+    }
+
+    setAuthChecked(true);
+  }, [router]);
+
+  if (!authChecked) {
+    return <main className="mx-auto max-w-3xl px-6 py-10 text-sm text-ink/60">正在檢查登入狀態…</main>;
   }
 
   if (!orderId) {
@@ -113,7 +121,7 @@ function CheckoutContent() {
               }
 
               await response.json();
-              router.push('/orders');
+              router.push('/payment-success');
             }}
             onError={() => setMessage('付款服務暫時無法使用，請稍後再試。')}
           />
